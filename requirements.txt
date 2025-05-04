@@ -3,3 +3,4 @@ yt-dlp
 spotipy
 aiohttp
 python-dotenv
+flask
