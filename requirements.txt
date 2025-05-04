@@ -1,4 +1,5 @@
-discord.py
+discord.py==2.3.2
 yt-dlp
 spotipy
 aiohttp
+python-dotenv
