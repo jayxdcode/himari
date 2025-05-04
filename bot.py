@@ -8,6 +8,26 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import aiohttp
 import os
 
+import threading
+from flask import Flask
+
+# === DUMMY WEB SERVER TO KEEP RENDER ALIVE ===
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Discord bot is running!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+# Start the dummy server in a separate thread
+threading.Thread(target=run_web).start()
+
+# === YOUR DISCORD BOT SETUP ===
+intents.members = True  # Only if you're using member events
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="/", intents=intents)
