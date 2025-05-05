@@ -11,6 +11,8 @@ from threading import Thread
 from collections import deque
 import os
 import subprocess
+import itertools
+
 from ytmusicapi import YTMusic
 from pytube import YouTube
 from yt_dlp import YoutubeDL
@@ -19,11 +21,16 @@ from keep_alive import keep_alive
 # Start keep-alive server
 keep_alive()
 
+# Load your list of SOCKS5 proxies (one per line, e.g. "socks5://1.2.3.4:1080")
+with open('socks5.txt', 'r') as pf:
+    socks_proxies = [line.strip() for line in pf if line.strip()]
+
+# Create an endless cycle so each call grabs the next proxy
+proxy_cycle = itertools.cycle(socks_proxies)
+
 # Discord Bot Token
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-
-# Global song queues
-song_queues = {}
+# Global song queues\song_queues = {}
 
 # Intents
 intents = discord.Intents.default()
@@ -124,7 +131,12 @@ def parse_duration(dur_str):
 
 # --- Search & Stream Logic ---
 def get_youtube_info(query: str):
-    # 1) Metadata via ytmusicapi
+    # rotate proxy on each request
+    proxy = next(proxy_cycle)
+    proxy_dict = {'socks5': proxy}
+
+    # 1) Metadata via ytmusicapi (using proxy)
+    ytmusic._session.proxies = proxy_dict
     results = ytmusic.search(query, filter='songs')
     if not results:
         subprocess.call(["echo", "[Error] No YTMusic results found."])
@@ -138,17 +150,24 @@ def get_youtube_info(query: str):
     music_url = f"https://music.youtube.com/watch?v={vid}"
     subprocess.call(["echo", f"[Info] YTMusic URL: {music_url}"])
 
-    # 2) Try pytube
+    # 2) Try pytube with proxy, fallback to yt_dlp
     stream_url = None
     try:
-        yt = YouTube(music_url)
+        proxy = next(proxy_cycle)
+        proxy_dict = {'socks5': proxy}
+        
+        yt = YouTube(music_url, proxies=proxy_dict)
         asp = yt.streams.filter(only_audio=True).order_by('abr').desc().first()
         stream_url = asp.url
         subprocess.call(["echo", f"[Pytube Stream URL] {stream_url}"])
     except Exception as e:
         subprocess.call(["echo", f"[Pytube failed] {e}, falling back to yt_dlp"])
         try:
-            with YoutubeDL(YTDL_OPTIONS) as ydl:
+            proxy = next(proxy_cycle)
+            proxy_dict = {'socks5': proxy}
+            
+            ydl_opts = {**YTDL_OPTIONS, 'proxy': proxy}
+            with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(music_url, download=False)
                 if 'entries' in info:
                     info = info['entries'][0]
