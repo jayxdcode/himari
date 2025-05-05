@@ -32,8 +32,8 @@ intents.guilds = True
 intents.voice_states = True
 
 # Bot instance
-description = "Himari Music Bot"
-bot = commands.Bot(command_prefix="!", intents=intents, description=description)
+description = "himari <3"
+bot = commands.Bot(command_prefix="/", intents=intents, description=description)
 
 # Initialize YouTube Music client
 ytmusic = YTMusic()
@@ -130,13 +130,28 @@ FFMPEG_OPTIONS = {
     'options': '-vn'
 }
 
+# Helper to parse duration strings from YTMusicAPI
+
+def parse_duration(duration_str):
+    if not duration_str:
+        return 0
+    parts = duration_str.split(':')
+    parts = [int(p) for p in parts]
+    if len(parts) == 3:
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    return parts[0]
+
+# Fetch metadata via YTMusic and stream URL via yt_dlp
+
 def get_youtube_info(query: str):
     """
     1. Search YouTube Music using ytmusicapi for song results.
-    2. Take first result's videoId.
-    3. Use yt_dlp to extract direct audio stream URL.
+    2. Take the first result's videoId.
+    3. Use yt_dlp to extract the direct audio stream URL.
     """
-    # Search on YouTube Music
+    # Search via YTMusicAPI
     results = ytmusic.search(query, filter='songs')
     if not results:
         subprocess.call(["echo", "[Error] No music results found."])
@@ -147,56 +162,38 @@ def get_youtube_info(query: str):
         subprocess.call(["echo", "[Error] No video ID."])
         return None
 
-    youtube_url = f"https://music.youtube.com/watch?v={video_id}"
-    subprocess.call(["echo", f"[Info] YouTube Music URL: {youtube_url}"])
+    # Build Music YouTube URL
+    ytm_url = f"https://music.youtube.com/watch?v={video_id}"
+    subprocess.call(["echo", f"[Info] YouTube Music URL: {ytm_url}"])
 
+    # Use yt_dlp to get the direct audio stream only
     try:
         with YoutubeDL(YTDL_OPTIONS) as ydl:
-            info = ydl.extract_info(youtube_url, download=False)
+            info = ydl.extract_info(ytm_url, download=False)
             if 'entries' in info:
                 info = info['entries'][0]
-            # Echo the direct stream URL
             stream_url = info.get('url')
             subprocess.call(["echo", f"[Stream URL] {stream_url}"])
-            return {
-                'url': stream_url,
-                'title': info.get('title'),
-                'thumbnail': info.get('thumbnail'),
-                'duration': info.get('duration'),
-                'uploader': info.get('uploader'),
-                'id': info.get('id'),
-            }
     except Exception as e:
         subprocess.call(["echo", f"[Error in get_youtube_info] {e}"])
         return None
 
-async def send_now_playing(interaction, title, thumb, duration, lrc_data):
-    embed = discord.Embed(title="Now Playing", description=f"**{title}**", color=0xff99cc)
-    if thumb:
-        embed.set_thumbnail(url=thumb)
-    embed.add_field(name="Progress", value=f"00:00 / {format_duration(duration)}", inline=False)
-    msg = await interaction.followup.send(embed=embed)
-    await msg.add_reaction("⏯")
-    await msg.add_reaction("⏭")
-    await msg.add_reaction("🔁")
+    # Metadata from YTMusicAPI
+    title = track.get('title')
+    thumbnails = track.get('thumbnails') or []
+    thumb_url = thumbnails[-1]['url'] if thumbnails else None
+    duration = parse_duration(track.get('duration'))
+    artists = track.get('artists') or []
+    uploader = artists[0]['name'] if artists else None
 
-    start = time.time()
-    current_line = ""
-    while interaction.guild.voice_client and interaction.guild.voice_client.is_playing():
-        elapsed = time.time() - start
-        progress = f"`{format_duration(elapsed)} / {format_duration(duration)}`"
-        embed.set_field_at(0, name="Progress", value=progress, inline=False)
-
-        if lrc_data:
-            for ts, line in lrc_data:
-                if elapsed >= ts:
-                    current_line = line
-                else:
-                    break
-            embed.description = f"**{title}**\n\n*{current_line}*"
-
-        await msg.edit(embed=embed)
-        await asyncio.sleep(1)
+    return {
+        'url': stream_url,
+        'title': title,
+        'thumbnail': thumb_url,
+        'duration': duration,
+        'uploader': uploader,
+        'id': video_id,
+    }
 
 # --- Slash Commands ---
 @bot.tree.command(name="play", description="Play a song")
