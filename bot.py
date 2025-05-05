@@ -2,12 +2,10 @@ import discord
 from discord.ext import commands
 import yt_dlp
 import asyncio
-import re
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
-import aiohttp
 import os
-
+from discord import app_commands
 import threading
 from flask import Flask
 
@@ -26,11 +24,9 @@ def run_web():
 threading.Thread(target=run_web).start()
 
 # === YOUR DISCORD BOT SETUP ===
-intents.members = True  # Only if you're using member events
-
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="/", intents=intents)
+bot = discord.Bot(intents=intents)  # Using discord.Bot for slash commands
 
 queues = {}
 
@@ -80,7 +76,7 @@ async def play_next(ctx):
     await send_now_playing(ctx, title, thumb, duration)
 
 async def send_now_playing(ctx, title, thumb, duration):
-    embed = discord.Embed(title="Now Playing", description=title, color=0x1DB954)
+    embed = discord.Embed(title="**Now Playing**", description=f"**{title}**", color=0x1DB954)
     if thumb:
         embed.set_thumbnail(url=thumb)
     embed.set_footer(text="© Source: YouTube")
@@ -90,13 +86,20 @@ async def send_now_playing(ctx, title, thumb, duration):
     await msg.add_reaction("⏭")
     await msg.add_reaction("🔁")
 
-@bot.command()
-async def play(ctx, *, args):
-    if not ctx.author.voice:
-        return await ctx.send("You're not in a voice channel.")
+def format_duration(seconds):
+    m, s = divmod(seconds, 60)
+    return f"{int(m):02}:{int(s):02}"
 
-    if ctx.voice_client is None:
-        await ctx.author.voice.channel.connect()
+# === Slash Command Definitions ===
+
+@bot.tree.command(name="play", description="Play a song or playlist")
+@app_commands.describe(args="Search term or URL")
+async def play(interaction: discord.Interaction, args: str):
+    if not interaction.user.voice:
+        return await interaction.response.send_message("You're not in a voice channel.", ephemeral=True)
+
+    if interaction.guild.voice_client is None:
+        await interaction.user.voice.channel.connect()
 
     is_playlist = args.startswith("-p ")
     query = args[3:] if is_playlist else args
@@ -107,54 +110,57 @@ async def play(ctx, *, args):
     else:
         queries = [(query,)]
 
-    queues.setdefault(ctx.guild.id, {"queue": [], "loop": False})
+    queues.setdefault(interaction.guild.id, {"queue": [], "loop": False})
     for q in queries:
-        queues[ctx.guild.id]['queue'].append(q[0])
+        queues[interaction.guild.id]['queue'].append(q[0])
 
-    if not ctx.voice_client.is_playing():
-        await play_next(ctx)
+    if not interaction.guild.voice_client.is_playing():
+        await play_next(interaction)
     else:
-        await ctx.send(f"Queued {len(queries)} track(s).")
+        await interaction.response.send_message(f"Queued {len(queries)} track(s).")
 
-@bot.command()
-async def pause(ctx):
-    if ctx.voice_client and ctx.voice_client.is_playing():
-        ctx.voice_client.pause()
-        await ctx.send("Paused.")
+@bot.tree.command(name="pause", description="Pause the current track")
+async def pause(interaction: discord.Interaction):
+    if interaction.guild.voice_client and interaction.guild.voice_client.is_playing():
+        interaction.guild.voice_client.pause()
+        await interaction.response.send_message("Paused.")
 
-@bot.command()
-async def stop(ctx):
-    if ctx.voice_client:
-        await ctx.voice_client.disconnect()
-        queues.pop(ctx.guild.id, None)
-        await ctx.send("Stopped and disconnected.")
+@bot.tree.command(name="stop", description="Stop the current track and disconnect")
+async def stop(interaction: discord.Interaction):
+    if interaction.guild.voice_client:
+        await interaction.guild.voice_client.disconnect()
+        queues.pop(interaction.guild.id, None)
+        await interaction.response.send_message("Stopped and disconnected.")
 
-@bot.command()
-async def loop(ctx):
-    g = ctx.guild.id
+@bot.tree.command(name="loop", description="Toggle looping of the queue")
+async def loop(interaction: discord.Interaction):
+    g = interaction.guild.id
     queues.setdefault(g, {"queue": [], "loop": False})
     queues[g]['loop'] = not queues[g]['loop']
-    await ctx.send("Looping is now " + ("enabled" if queues[g]['loop'] else "disabled"))
+    await interaction.response.send_message("Looping is now " + ("enabled" if queues[g]['loop'] else "disabled"))
 
-@bot.command()
-async def enqueue(ctx, *, query):
-    queues.setdefault(ctx.guild.id, {"queue": [], "loop": False})
-    queues[ctx.guild.id]['queue'].append(query)
-    await ctx.send("Added to queue.")
+@bot.tree.command(name="enqueue", description="Add a song to the queue")
+async def enqueue(interaction: discord.Interaction, query: str):
+    queues.setdefault(interaction.guild.id, {"queue": [], "loop": False})
+    queues[interaction.guild.id]['queue'].append(query)
+    await interaction.response.send_message(f"Added {query} to queue.")
 
-@bot.command()
-async def clear(ctx):
-    queues[ctx.guild.id]['queue'].clear()
-    await ctx.send("Queue cleared.")
+@bot.tree.command(name="clear", description="Clear the queue")
+async def clear(interaction: discord.Interaction):
+    queues[interaction.guild.id]['queue'].clear()
+    await interaction.response.send_message("Queue cleared.")
 
-@bot.command()
-async def lyrics(ctx):
+@bot.tree.command(name="lyrics", description="Get the lyrics of the current song")
+async def lyrics(interaction: discord.Interaction):
     # Placeholder for future integration with lrclib + translation + romanization
-    await ctx.send("Lyrics feature coming soon with translation, romanization, and synced display!")
+    await interaction.response.send_message("Lyrics feature coming soon with translation, romanization, and synced display!")
 
-def format_duration(seconds):
-    m, s = divmod(seconds, 60)
-    return f"{int(m):02}:{int(s):02}"
+# === Syncing Commands ===
+@bot.event
+async def on_ready():
+    await bot.tree.sync()  # Sync slash commands when bot is ready
+    print(f"Logged in as {bot.user}")
 
+# === Start the bot ===
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(DISCORD_TOKEN)
