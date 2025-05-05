@@ -21,6 +21,8 @@ from keep_alive import keep_alive
 # Start keep-alive server
 keep_alive()
 
+song_queues = {}
+
 # Load your list of SOCKS5 proxies (one per line, e.g. "socks5://1.2.3.4:1080")
 with open('socks5.txt', 'r') as pf:
     socks_proxies = [line.strip() for line in pf if line.strip()]
