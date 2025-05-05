@@ -40,12 +40,20 @@ ytmusic = YTMusic()
 
 # yt_dlp and FFmpeg options
 YTDL_OPTIONS = {
-    'format': 'bestaudio',
+    'format': 'bestaudio/best',
     'quiet': True,
+    'no_warnings': True,
+    'default_search': 'ytsearch',
+    'cookiefile': 'cookies.txt',
+    'source_address': '0.0.0.0',
+    'force_generic_extractor': False,
     'noplaylist': True,
-    'default_search': 'auto',
-    'extract_flat': 'in_playlist'
+    'geo_bypass': True,
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    }
 }
+
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn'
