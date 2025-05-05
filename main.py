@@ -103,6 +103,14 @@ async def fetch_lrc(query):
                 lrc_json = await lrc_resp.json()
                 return lrc_json.get("syncedLyrics")
 
+
+# Optional: define a list of proxies if you want IP rotation
+PROXIES = [
+    # "http://user:pass@proxy1:port",
+    # "http://user:pass@proxy2:port",
+    # Add your proxy URLs here
+]
+
 def get_youtube_info(query: str):
     ydl_opts = {
         'quiet': True,
@@ -110,22 +118,49 @@ def get_youtube_info(query: str):
         'format': 'bestaudio/best',
         'noplaylist': True,
         'default_search': 'ytsearch',
+        'cookiefile': 'cookies.txt',  # <-- Your YouTube cookies file
+        'source_address': '0.0.0.0',  # Helps when using IP binding
+        'http_headers': {
+            'User-Agent': (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Referer': 'https://music.youtube.com/',
+        },
+        'geo_bypass': True,
+        'geo_bypass_country': 'US',
+        'prefer_insecure': True,
+        'force_generic_extractor': False,
+        'cachedir': False,
+
+        # Optional proxy rotation (uncomment if using PROXIES above)
+        # 'proxy': random.choice(PROXIES),
     }
+
     try:
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(query, download=False)
             if 'entries' in info:
                 info = info['entries'][0]
+
+            url = info.get('webpage_url', '')
+            if "youtube.com" in url:
+                url = url.replace("www.youtube.com", "music.youtube.com")
+
             return {
-                'url': info.get('webpage_url'),
+                'url': url,
                 'title': info.get('title'),
                 'thumbnail': info.get('thumbnail'),
                 'duration': info.get('duration'),
                 'uploader': info.get('uploader'),
                 'id': info.get('id'),
             }
+
     except Exception as e:
-        print(f"[Error] {e}")
+        print(f"[Error in get_youtube_info] {e}")
         return None
 
 async def send_now_playing(interaction, title, thumb, duration, lrc_data):
