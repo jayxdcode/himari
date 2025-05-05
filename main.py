@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import yt_dlp
+from yt_dlp import YoutubeDL
+import yt_dlp.utils
 import asyncio
 import random
 import time
@@ -101,49 +103,45 @@ async def fetch_lrc(query):
 				return lrc_json.get("syncedLyrics")
 
 
-def get_youtube_info(query):
-	sites = [
-		"https://www.youtube.com",  # default
-		"https://music.youtube.com",
-		"https://m.youtube.com"
-	]
+def get_youtube_info(query: str):
+    """
+    Fetches information about a YouTube video.
+    Accepts a direct URL or a search query.
+    Does NOT support playlists.
+    Returns a dictionary with URL, title, thumbnail, and duration.
+    """
 
-	for site in sites:
-		ydl_opts = {
-			'format': 'bestaudio[ext=webm][acodec=opus]/bestaudio',
-			'quiet': True,
-			'default_search': 'ytsearch',
-			'noplaylist': True,
-			'cookiefile': 'cookies.txt',
-			'source_address': '0.0.0.0',
-			'extractor_args': {
-				'youtube': {
-					'music': ['true']
-				}
-			},
-			'postprocessors': [{
-				'key': 'FFmpegExtractAudio',
-				'preferredcodec': 'opus',
-				'preferredquality': '192',
-			}],
-			'geo_bypass': True,
-			'final_ext': 'webm',
-			'youtube_include_dash_manifest': False,
-			'force_generic_extractor': False,
-			'outtmpl': '%(id)s.%(ext)s',
-		}
+    ydl_opts = {
+        'quiet': True,
+        'extract_flat': False,
+        'format': 'bestaudio/best',
+        'noplaylist': True,  # Prevent playlist extraction
+        'default_search': 'ytsearch',  # Allows text search
+    }
 
-		with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-			try:
-				info = ydl.extract_info(query if "http" in query else f"{site}/results?search_query={query}", download=False)
-				if "entries" in info:
-					info = info["entries"][0]
-				return info["url"], info["title"], info.get("thumbnail"), int(info.get("duration", 0))
-			except Exception as e:
-				print(f"Failed with {site}: {e}")
-				continue
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(query, download=False)
 
-	raise Exception("No valid source found.")
+            # If a search was used, `extract_info` returns a dict with 'entries'
+            if 'entries' in info:
+                info = info['entries'][0]
+
+            return {
+                'url': info.get('webpage_url'),
+                'title': info.get('title'),
+                'thumbnail': info.get('thumbnail'),
+                'duration': info.get('duration'),  # in seconds
+                'uploader': info.get('uploader'),
+                'id': info.get('id'),
+            }
+
+    except yt_dlp.utils.DownloadError as e:
+        print(f"[YTDL Error] {e}")
+        return None
+    except Exception as e:
+        print(f"[Unexpected Error] {e}")
+        return None
 
 async def send_now_playing(interaction, title, thumb, duration, lrc_data):
 	embed = discord.Embed(title="**Now Playing**", description=f"**{title}**", color=0xff99cc)
