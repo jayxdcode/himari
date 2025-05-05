@@ -1,0 +1,14 @@
+name: Keep Render Service Alive
+
+on:
+  schedule:
+    - cron: '*/25 * * * *'  # Every 25 minutes
+  workflow_dispatch:        # Allows manual triggering
+
+jobs:
+  ping-render:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Curl Render URL
+        run: curl -s -o /dev/null -w "%{http_code}" https://your-render-url.onrender.com
