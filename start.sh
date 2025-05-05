@@ -24,14 +24,5 @@ cd "$REPO_NAME" || exit 1
 echo "[*] Copying ffmpeg binary into the repo..."
 cp "$FFMPEG_PATH" ./ffmpeg
 
-# Step 5: Git config and push
-echo "[*] Configuring git and pushing binary..."
-git config user.name "jayxdcode"
-git config user.email "alt444.001@gmail.com"
-
-git add ffmpeg
-git commit -m "Add ffmpeg binary"
-git push origin main
-
 # Run
 python3 main.py
