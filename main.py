@@ -102,30 +102,48 @@ async def fetch_lrc(query):
 
 
 def get_youtube_info(query):
-	ydl_opts = {
-		'format': 'bestaudio[ext=webm][acodec=opus]/bestaudio',
-		'quiet': True,
-		'default_search': 'ytsearch',
-		'noplaylist': True,
-		'cookiefile': 'cookies.txt',
-		'source_address': '0.0.0.0',
-		'extractor_args': {
-			'youtube': {
-				'music': ['true']
-			}
-		},
-		'postprocessors': [{
-			'key': 'FFmpegExtractAudio',
-			'preferredcodec': 'opus',
-			'preferredquality': '192',
-		}],
-	}
+	sites = [
+		"https://www.youtube.com",  # default
+		"https://music.youtube.com",
+		"https://m.youtube.com"
+	]
 
-	with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-		info = ydl.extract_info(query, download=False)
-		if "entries" in info:
-			info = info["entries"][0]
-		return info["url"], info["title"], info.get("thumbnail"), int(info.get("duration", 0))
+	for site in sites:
+		ydl_opts = {
+			'format': 'bestaudio[ext=webm][acodec=opus]/bestaudio',
+			'quiet': True,
+			'default_search': 'ytsearch',
+			'noplaylist': True,
+			'cookiefile': 'cookies.txt',
+			'source_address': '0.0.0.0',
+			'extractor_args': {
+				'youtube': {
+					'music': ['true']
+				}
+			},
+			'postprocessors': [{
+				'key': 'FFmpegExtractAudio',
+				'preferredcodec': 'opus',
+				'preferredquality': '192',
+			}],
+			'geo_bypass': True,
+			'final_ext': 'webm',
+			'youtube_include_dash_manifest': False,
+			'force_generic_extractor': False,
+			'outtmpl': '%(id)s.%(ext)s',
+		}
+
+		with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+			try:
+				info = ydl.extract_info(query if "http" in query else f"{site}/results?search_query={query}", download=False)
+				if "entries" in info:
+					info = info["entries"][0]
+				return info["url"], info["title"], info.get("thumbnail"), int(info.get("duration", 0))
+			except Exception as e:
+				print(f"Failed with {site}: {e}")
+				continue
+
+	raise Exception("No valid source found.")
 
 async def send_now_playing(interaction, title, thumb, duration, lrc_data):
 	embed = discord.Embed(title="**Now Playing**", description=f"**{title}**", color=0xff99cc)
@@ -205,7 +223,7 @@ async def play_next(guild_id):
 		await send_now_playing(interaction, title, thumb, duration, lrc_data)
 	except Exception as e:
 		print(f"Error in play_next: {e}")
-		await interaction.followup.send("Failed to play the song.")
+		await interaction.followup.send("Uwah~ I tried all I could, but I couldn't play that song... Sniffle~ Try another one, okay?")
 		await play_next(guild_id)  # Try the next song
 
 @bot.tree.command(name="pause", description="Pause playback")
