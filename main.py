@@ -147,9 +147,7 @@ async def send_now_playing(interaction, title, thumb, duration, lrc_data):
 	embed = discord.Embed(title="**Now Playing**", description=f"**{title}**", color=0xff99cc)
 	if thumb:
 		embed.set_thumbnail(url=thumb)
-	embed.add_field(name="Progress",
-	                value=f"`00:00 / {format_duration(duration)}`",
-	                inline=False)
+	embed.add_field(name="Progress", value=f"`00:00 / {format_duration(duration)}`", inline=False)
 	msg = await interaction.followup.send(embed=embed)
 	await msg.add_reaction("⏯")
 	await msg.add_reaction("⏭")
@@ -207,7 +205,8 @@ async def play_next(guild_id):
 			vc = await interaction.user.voice.channel.connect()
 
 		url, title, thumb, duration = get_youtube_info(query)
-		source = await discord.FFmpegOpusAudio.from_probe(url, method='fallback', executable='./ffmpeg')
+		print(f"[YT URL] {title} - {url} ==> {duration}")
+		source = await discord.FFmpegOpusAudio.from_probe(url, method='fallback', executable='./ffmpeg.bin')
 		vc.play(source, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(guild_id), bot.loop))
 
 		await interaction.followup.send(get_response("play", title=title))
@@ -271,9 +270,7 @@ async def stop(interaction: discord.Interaction):
 		await interaction.response.send_message("Nothing is playing right now~")
 
 
-@bot.tree.command(
-    name="end",
-    description="Stop music, and clear queue, leave voice channel~~")
+@bot.tree.command(name="end", description="Stop music, and clear queue, leave voice channel~~")
 async def end(interaction: discord.Interaction):
 	vc = interaction.guild.voice_client
 	song_queues[interaction.guild.id] = deque()
