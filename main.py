@@ -194,7 +194,7 @@ async def play_next(guild_id):
 		url, title, thumb, duration = get_youtube_info(query)
 		source = await discord.FFmpegOpusAudio.from_probe(url,
 		                                                  method='fallback',
-		                                                  executable='./ffmpeg')
+		                                                  executable='./ffmpeg.bin')
 		vc.play(source,
 		        after=lambda e: asyncio.run_coroutine_threadsafe(
 		            play_next(guild_id), bot.loop))
