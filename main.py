@@ -107,7 +107,7 @@ def get_youtube_info(query):
 		'quiet': True,
 		'default_search': 'ytsearch',
 		'noplaylist': True,
-		'cookiefile': 'cookies.txt'
+		'cookiefile': 'cookies.txt',
 		'source_address': '0.0.0.0',
 		'extractor_args': {
 			'youtube': {
