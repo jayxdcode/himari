@@ -141,6 +141,7 @@ def get_youtube_info(query: str):
     }
 
     try:
+        query = f"site:music.youtube.com {query}"
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(query, download=False)
             if 'entries' in info:
