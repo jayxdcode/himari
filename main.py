@@ -103,33 +103,32 @@ async def fetch_lrc(query):
 
 def get_youtube_info(query):
 	ydl_opts = {
-	    'format':
-	    'bestaudio[ext=webm][acodec=opus]/bestaudio',
-	    'quiet':
-	    True,
-	    'default_search':
-	    'ytsearch',
-	    'noplaylist':
-	    True,
-	    'postprocessors': [{
-	        'key': 'FFmpegExtractAudio',
-	        'preferredcodec': 'opus',
-	        'preferredquality': '192',  # Higher bitrate
-	    }],
+		'format': 'bestaudio[ext=webm][acodec=opus]/bestaudio',
+		'quiet': True,
+		'default_search': 'ytsearch',
+		'noplaylist': True,
+		'cookiefile': 'cookies.txt'
+		'source_address': '0.0.0.0',
+		'extractor_args': {
+			'youtube': {
+				'music': ['true']
+			}
+		},
+		'postprocessors': [{
+			'key': 'FFmpegExtractAudio',
+			'preferredcodec': 'opus',
+			'preferredquality': '192',
+		}],
 	}
 
 	with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 		info = ydl.extract_info(query, download=False)
 		if "entries" in info:
 			info = info["entries"][0]
-		return info["url"], info["title"], info.get("thumbnail"), int(
-		    info.get("duration", 0))
-
+		return info["url"], info["title"], info.get("thumbnail"), int(info.get("duration", 0))
 
 async def send_now_playing(interaction, title, thumb, duration, lrc_data):
-	embed = discord.Embed(title="**Now Playing**",
-	                      description=f"**{title}**",
-	                      color=0xff99cc)
+	embed = discord.Embed(title="**Now Playing**", description=f"**{title}**", color=0xff99cc)
 	if thumb:
 		embed.set_thumbnail(url=thumb)
 	embed.add_field(name="Progress",
