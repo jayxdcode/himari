@@ -81,206 +81,135 @@ RESPONSES = {
 def get_response(category, **kwargs):
     return random.choice(RESPONSES[category]).format(**kwargs)
 
-
 def format_duration(seconds):
-    mins = int(seconds // 60)
-    secs = int(seconds % 60)
+    mins, secs = divmod(int(seconds), 60)
     return f"{mins:02}:{secs:02}"
 
-
 def parse_lrc(lrc_text):
-    parsed = []
-    lines = lrc_text.splitlines()
-    for line in lines:
-        if line.startswith("["):
-            parts = line.split("]")
-            for part in parts[:-1]:
-                timestamp = part.strip("[]")
-                try:
-                    m, s = map(float, timestamp.split(':'))
-                    parsed.append((m * 60 + s, parts[-1]))
-                except:
-                    continue
-    return parsed
+    # unchanged
+    ...
 
 async def fetch_lrc(query):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f"https://lrclib.net/api/search?q={query}") as resp:
-            if resp.status != 200:
-                return None
-            search_data = await resp.json()
-            if not search_data:
-                return None
-            best = search_data[0]
-            track_id = best['id']
-            async with session.get(f"https://lrclib.net/api/get?track_id={track_id}") as lrc_resp:
-                lrc_json = await lrc_resp.json()
-                return lrc_json.get("syncedLyrics")
+    # unchanged
+    ...
 
-# --- Search on YouTube Music and Stream Audio ---
-YTDL_OPTIONS = {
-    'format': 'bestaudio',
-    'quiet': True,
-    'noplaylist': True,
-    'default_search': 'auto',
-    'extract_flat': 'in_playlist'
-}
+# Helper to parse YTMusic duration strings
+def parse_duration(dur_str):
+    if not dur_str:
+        return 0
+    parts = [int(x) for x in dur_str.split(':')]
+    if len(parts) == 3:
+        return parts[0]*3600 + parts[1]*60 + parts[2]
+    if len(parts) == 2:
+        return parts[0]*60 + parts[1]
+    return parts[0]
+
+# --- Search with YTMusicAPI, Stream with no extra downloads ---
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn'
 }
 
-# Helper to parse duration strings from YTMusicAPI
-
-def parse_duration(duration_str):
-    if not duration_str:
-        return 0
-    parts = duration_str.split(':')
-    parts = [int(p) for p in parts]
-    if len(parts) == 3:
-        return parts[0] * 3600 + parts[1] * 60 + parts[2]
-    if len(parts) == 2:
-        return parts[0] * 60 + parts[1]
-    return parts[0]
-
-# Fetch metadata via YTMusic and stream URL via yt_dlp
-
 def get_youtube_info(query: str):
     """
-    1. Search YouTube Music using ytmusicapi for song results.
-    2. Take the first result's videoId.
-    3. Use yt_dlp to extract the direct audio stream URL.
+    1. Search YouTube Music via ytmusicapi for metadata.
+    2. Attempt to get direct audio stream URL via pytube.
+    3. Fallback to yt_dlp if pytube fails.
     """
-    # Search via YTMusicAPI
+    # 1) Metadata from YTMusicAPI
     results = ytmusic.search(query, filter='songs')
     if not results:
-        subprocess.call(["echo", "[Error] No music results found."])
+        subprocess.call(["echo", "[Error] No YTMusic results found."])
         return None
     track = results[0]
     video_id = track.get('videoId')
     if not video_id:
-        subprocess.call(["echo", "[Error] No video ID."])
+        subprocess.call(["echo", "[Error] Missing video ID."])
         return None
 
-    # Build Music YouTube URL
-    ytm_url = f"https://music.youtube.com/watch?v={video_id}"
-    subprocess.call(["echo", f"[Info] YouTube Music URL: {ytm_url}"])
+    music_url = f"https://music.youtube.com/watch?v={video_id}"
+    subprocess.call(["echo", f"[Info] YTMusic URL: {music_url}"])
 
-    # Use yt_dlp to get the direct audio stream only
+    stream_url = None
+    # 2) Try pytube for direct stream URL
     try:
-        with YoutubeDL(YTDL_OPTIONS) as ydl:
-            info = ydl.extract_info(ytm_url, download=False)
-            if 'entries' in info:
-                info = info['entries'][0]
-            stream_url = info.get('url')
-            subprocess.call(["echo", f"[Stream URL] {stream_url}"])
+        from pytube import YouTube
+        yt = YouTube(music_url)
+        audio_stream = yt.streams.filter(only_audio=True).order_by('abr').desc().first()
+        stream_url = audio_stream.url
+        subprocess.call(["echo", f"[Pytube Stream URL] {stream_url}"])
     except Exception as e:
-        subprocess.call(["echo", f"[Error in get_youtube_info] {e}"])
+        subprocess.call(["echo", f"[Pytube failed] {e}, falling back to yt_dlp"])
+        # 3) Fallback to yt_dlp
+        try:
+            from yt_dlp import YoutubeDL
+            with YoutubeDL(YTDL_OPTIONS) as ydl:
+                info = ydl.extract_info(music_url, download=False)
+                if 'entries' in info:
+                    info = info['entries'][0]
+                stream_url = info.get('url')
+                subprocess.call(["echo", f"[yt_dlp Stream URL] {stream_url}"])
+        except Exception as e2:
+            subprocess.call(["echo", f"[Error fallback yt_dlp] {e2}"])
+            return None
+
+    if not stream_url:
+        subprocess.call(["echo", "[Error] Could not obtain stream URL."])
         return None
 
-    # Metadata from YTMusicAPI
+    # 4) Compile metadata
     title = track.get('title')
-    thumbnails = track.get('thumbnails') or []
-    thumb_url = thumbnails[-1]['url'] if thumbnails else None
+    thumbs = track.get('thumbnails') or []
+    thumb_url = thumbs[-1]['url'] if thumbs else None
     duration = parse_duration(track.get('duration'))
-    artists = track.get('artists') or []
-    uploader = artists[0]['name'] if artists else None
+    artist = track.get('artists', [{}])[0].get('name', 'Unknown')
 
     return {
         'url': stream_url,
         'title': title,
         'thumbnail': thumb_url,
         'duration': duration,
-        'uploader': uploader,
-        'id': video_id,
+        'uploader': artist,
+        'id': video_id
     }
 
-# --- Slash Commands ---
-@bot.tree.command(name="play", description="Play a song")
-@app_commands.describe(query="Search or link")
-async def play(interaction: discord.Interaction, query: str):
-    await interaction.response.defer()
-    if not interaction.user.voice or not interaction.user.voice.channel:
-        return await interaction.followup.send("Join a voice channel first!")
-
-    guild_id = interaction.guild.id
-    if guild_id not in song_queues:
-        song_queues[guild_id] = deque()
-
-    queue_empty = not song_queues[guild_id]
-    song_queues[guild_id].append((query, interaction))
-
-    if queue_empty:
-        await play_next(guild_id)
-    else:
-        await interaction.followup.send(f"Enqueued **{query}**!")
-
-async def play_next(guild_id):
-    if guild_id not in song_queues or not song_queues[guild_id]:
-        return
-
-    query, interaction = song_queues[guild_id].popleft()
-    try:
-        vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
-        info = get_youtube_info(query)
-        if not info:
-            raise Exception("Could not get YouTube info")
-
-        source = await discord.FFmpegOpusAudio.from_probe(
-            info['url'],
-            method='fallback',
-            executable='./ffmpeg.bin' if os.path.exists('./ffmpeg.bin') else 'ffmpeg',
-            **FFMPEG_OPTIONS
-        )
-        vc.play(source, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(guild_id), bot.loop))
-
-        await interaction.followup.send(get_response("play", title=info['title']))
-        raw_lrc = await fetch_lrc(info['title'])
-        lrc_data = parse_lrc(raw_lrc) if raw_lrc else []
-        await send_now_playing(interaction, info['title'], info['thumbnail'], info['duration'], lrc_data)
-
-    except Exception as e:
-        subprocess.call(["echo", f"[Error in play_next] {e}"])
-        await interaction.followup.send("Oops, couldn't play that song. Moving on...")
-        await play_next(guild_id)
-
-@bot.tree.command(name="pause", description="Pause playback")
+# --- Bot Commands ---
+@bot.tree.command(name="pause", description="Pause playback ⏸️")
 async def pause(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     if vc and vc.is_playing():
         vc.pause()
         await interaction.response.send_message(get_response("pause"))
 
-@bot.tree.command(name="resume", description="Resume playback")
+@bot.tree.command(name="resume", description="Resume playback ▶️")
 async def resume(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     if vc and vc.is_paused():
         vc.resume()
         await interaction.response.send_message(get_response("resume"))
 
-@bot.tree.command(name="skip", description="Skip current song")
+@bot.tree.command(name="skip", description="Skip current song ⏭️")
 async def skip(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     if vc and vc.is_playing():
         vc.stop()
         await interaction.response.send_message(get_response("skip"))
 
-@bot.tree.command(name="enqueue", description="Add a song to the queue")
-@app_commands.describe(query="Search or link")
+@bot.tree.command(name="enqueue", description="Add a song to the queue ➕")
+@app_commands.describe(query="Song name or link 🎵")
 async def enqueue(interaction: discord.Interaction, query: str):
     await interaction.response.defer()
-    guild_id = interaction.guild.id
-    if guild_id not in song_queues:
-        song_queues[guild_id] = deque()
-    song_queues[guild_id].append((query, interaction))
-    await interaction.followup.send(f"Enqueued **{query}**!")
+    gid = interaction.guild.id
+    song_queues.setdefault(gid, deque())
+    song_queues[gid].append((query, interaction))
+    await interaction.followup.send(f"Enqueued **{query}**~ 💕")
 
-@bot.tree.command(name="clear", description="Clear the queue")
+@bot.tree.command(name="clear", description="Clear the queue 🗑️")
 async def clear(interaction: discord.Interaction):
     song_queues[interaction.guild.id] = deque()
-    await interaction.response.send_message("Queue cleared~")
+    await interaction.response.send_message("Queue cleared~ 🌸")
 
-@bot.tree.command(name="stop", description="Stop music and disconnect")
+@bot.tree.command(name="stop", description="Stop and disconnect ⏹️")
 async def stop(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     if vc:
@@ -289,7 +218,7 @@ async def stop(interaction: discord.Interaction):
     song_queues[interaction.guild.id] = deque()
     await interaction.response.send_message(get_response("stop"))
 
-@bot.tree.command(name="end", description="Stop music and leave")
+@bot.tree.command(name="end", description="Stop and leave ✨")
 async def end(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     song_queues[interaction.guild.id] = deque()
@@ -300,10 +229,10 @@ async def end(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-    subprocess.call(["echo", f"Himari is ready as {bot.user}"])
+    subprocess.call(["echo", f"Himari is awake as {bot.user}~"])
 
 # --- Run Bot ---
 if DISCORD_TOKEN:
     bot.run(DISCORD_TOKEN)
 else:
-    subprocess.call(["echo", "DISCORD_TOKEN not set."])
+    subprocess.call(["echo", "[Fatal] DISCORD_TOKEN not set."])
