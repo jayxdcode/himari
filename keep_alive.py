@@ -2,12 +2,18 @@ from flask import Flask, send_file
 from threading import Thread
 import os
 
+test_var = os.getenv("test")
+
 # --- Flask keep-alive ---
 app = Flask('')
 
 @app.route('/')
 def home():
-	return "Himari-chan: I'm ready ^^"
+	return f"""
+	Himari-chan: I'm ready ^^
+	
+	test? = {test_var}
+	"""
 
 @app.route('/download/ffmpeg')
 def download_ffmpeg():
