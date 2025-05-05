@@ -12,6 +12,7 @@ from flask import Flask
 from threading import Thread
 from collections import deque
 import os
+import subprocess
 from ytmusicapi import YTMusic
 from keep_alive import keep_alive
 
@@ -31,8 +32,8 @@ intents.guilds = True
 intents.voice_states = True
 
 # Bot instance
-description = "ｋｏｎｉｃｈｉｗａ！ ｈｉｍａｒｉ ｄｅｓｕ！"
-bot = commands.Bot(command_prefix="/", intents=intents, description=description)
+description = "Himari Music Bot"
+bot = commands.Bot(command_prefix="!", intents=intents, description=description)
 
 # Initialize YouTube Music client
 ytmusic = YTMusic()
@@ -138,20 +139,27 @@ def get_youtube_info(query: str):
     # Search on YouTube Music
     results = ytmusic.search(query, filter='songs')
     if not results:
+        subprocess.call(["echo", "[Error] No music results found."])
         return None
     track = results[0]
     video_id = track.get('videoId')
     if not video_id:
+        subprocess.call(["echo", "[Error] No video ID."])
         return None
 
     youtube_url = f"https://music.youtube.com/watch?v={video_id}"
+    subprocess.call(["echo", f"[Info] YouTube Music URL: {youtube_url}"])
+
     try:
         with YoutubeDL(YTDL_OPTIONS) as ydl:
             info = ydl.extract_info(youtube_url, download=False)
             if 'entries' in info:
                 info = info['entries'][0]
+            # Echo the direct stream URL
+            stream_url = info.get('url')
+            subprocess.call(["echo", f"[Stream URL] {stream_url}"])
             return {
-                'url': info.get('url'),  # direct audio stream URL
+                'url': stream_url,
                 'title': info.get('title'),
                 'thumbnail': info.get('thumbnail'),
                 'duration': info.get('duration'),
@@ -159,7 +167,7 @@ def get_youtube_info(query: str):
                 'id': info.get('id'),
             }
     except Exception as e:
-        print(f"[Error in get_youtube_info] {e}")
+        subprocess.call(["echo", f"[Error in get_youtube_info] {e}"])
         return None
 
 async def send_now_playing(interaction, title, thumb, duration, lrc_data):
@@ -235,7 +243,7 @@ async def play_next(guild_id):
         await send_now_playing(interaction, info['title'], info['thumbnail'], info['duration'], lrc_data)
 
     except Exception as e:
-        print(f"Error in play_next: {e}")
+        subprocess.call(["echo", f"[Error in play_next] {e}"])
         await interaction.followup.send("Oops, couldn't play that song. Moving on...")
         await play_next(guild_id)
 
@@ -295,10 +303,10 @@ async def end(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-    print(f"Himari is ready~ as {bot.user}")
+    subprocess.call(["echo", f"Himari is ready as {bot.user}"])
 
 # --- Run Bot ---
 if DISCORD_TOKEN:
     bot.run(DISCORD_TOKEN)
 else:
-    print("DISCORD_TOKEN not set.")
+    subprocess.call(["echo", "DISCORD_TOKEN not set."])
