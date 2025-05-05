@@ -4,3 +4,4 @@ spotipy
 aiohttp
 python-dotenv
 flask
+PyNaCl
