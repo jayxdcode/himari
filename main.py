@@ -179,7 +179,6 @@ async def send_now_playing(interaction, title, thumb, duration, lrc_data):
 @app_commands.describe(query="Search or link")
 async def play(interaction: discord.Interaction, query: str):
 	await interaction.response.defer()
-
 	if not interaction.user.voice or not interaction.user.voice.channel:
 		return await interaction.followup.send("Join a voice channel first!")
 
@@ -201,18 +200,15 @@ async def play_next(guild_id):
 
 	query, interaction = song_queues[guild_id].popleft()
 
+
 	try:
 		vc = interaction.guild.voice_client
 		if not vc:
 			vc = await interaction.user.voice.channel.connect()
 
 		url, title, thumb, duration = get_youtube_info(query)
-		source = await discord.FFmpegOpusAudio.from_probe(url,
-		                                                  method='fallback',
-		                                                  executable='./ffmpeg.bin')
-		vc.play(source,
-		        after=lambda e: asyncio.run_coroutine_threadsafe(
-		            play_next(guild_id), bot.loop))
+		source = await discord.FFmpegOpusAudio.from_probe(url, method='fallback', executable='./ffmpeg')
+		vc.play(source, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(guild_id), bot.loop))
 
 		await interaction.followup.send(get_response("play", title=title))
 
