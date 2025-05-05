@@ -51,6 +51,8 @@ def get_youtube_info(query: str):
         'extract_flat': False,
         'format': 'bestaudio/best',
         'noplaylist': True,  # Prevent playlist extraction
+        'cookies': 'cookies.txt',
+        'proxy': 'socks5://146.190.245.171:1080'
         'default_search': 'ytsearch',  # Allows text search
     }
 
