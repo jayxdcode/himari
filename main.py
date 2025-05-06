@@ -21,6 +21,36 @@ from keep_alive import keep_alive
 # Start keep-alive server
 keep_alive()
 
+# --- Proxy Setup ---
+def load_proxies_from_api(limit=500, page=1):
+	API_URL = (
+		f"https://proxylist.geonode.com/api/proxy-list"
+		f"?limit={limit}&page={page}"
+		"&sort_by=lastChecked&sort_type=desc"
+	)
+	try:
+		resp = requests.get(API_URL, timeout=10)
+		resp.raise_for_status()
+		items = resp.json().get('data', [])8
+	except Exception as e:
+		print(f"[Error] Failed to fetch proxies from API: {e}")
+		return []
+
+	# Keep only SOCKS5 proxies
+	return [
+		f"{item['ip']}:{item['port']}"
+		for item in items
+		if 'socks5' in item.get('protocols', [])
+	]
+
+# Load and cycle through proxies
+socks_proxies = load_proxies_from_api()
+if not socks_proxies:
+	raise RuntimeError("No SOCKS5 proxies could be loaded from API.")
+
+# Endless cycle of proxies
+proxy_cycle = itertools.cycle(socks_proxies)
+
 song_queues = {}
 
 # Load your list of SOCKS5 proxies (one per line, e.g. "socks5://1.2.3.4:1080")
@@ -42,7 +72,7 @@ intents.voice_states = True
 
 # Bot instance
 description = "Himari wants to spin some tunes for you! 💖"
-bot = commands.Bot(command_prefix="!", intents=intents, description=description)
+bot = commands.Bot(command_prefix="/", intents=intents, description=description)
 
 # Initialize YouTube Music client
 ytmusic = YTMusic()
