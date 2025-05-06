@@ -31,7 +31,7 @@ def load_proxies_from_api(limit=500, page=1):
 	try:
 		resp = requests.get(API_URL, timeout=10)
 		resp.raise_for_status()
-		items = resp.json().get('data', [])8
+		items = resp.json().get('data', [])
 	except Exception as e:
 		print(f"[Error] Failed to fetch proxies from API: {e}")
 		return []
