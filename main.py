@@ -6,6 +6,7 @@ import asyncio
 import random
 import time
 import aiohttp
+import requests
 from flask import Flask
 from threading import Thread
 from collections import deque
