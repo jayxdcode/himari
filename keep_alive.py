@@ -2,8 +2,6 @@ from flask import Flask, send_file
 from threading import Thread
 import os
 
-test_var = os.getenv("test")
-
 # --- Flask keep-alive ---
 app = Flask('')
 
@@ -11,8 +9,9 @@ app = Flask('')
 def home():
 	return f"""
 	Himari-chan: I'm ready ^^
-	
-	test? = {test_var}
+	<br>
+	<br>
+	Build info: Himari version 4 (0.0.4) Production GitHub Codepaces version (Limited runtime!)
 	"""
 
 @app.route('/download/ffmpeg')

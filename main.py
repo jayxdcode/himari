@@ -358,7 +358,7 @@ async def send_now_playing(interaction, track: Track):
         elapsed = interaction.guild.voice_client.is_paused() and view.paused_time or time.time() - start_time
         embed.set_field_at(0, name='Progress', value=f'`{format_duration(elapsed)} / {format_duration(track.duration)}`')
         if lrc:
-            while idx + 1 < len(lrc) and elapsed + 0.35 >= lrc[idx+1][0]:
+            while idx + 1 < len(lrc) and elapsed - 0.25 >= lrc[idx+1][0]:
                 idx += 1
             prev_line = lrc[idx-1][1] if idx > 0 else '♪'
             curr_line = lrc[idx][1] if lrc else '♪'
