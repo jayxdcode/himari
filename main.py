@@ -292,7 +292,19 @@ async def fetch_track_info(query: str) -> Track:
     if not track:
         raise ValueError("Track not found")
     # get direct audio
-    opts = {'format': 'bestaudio/best', 'cookiefile': 'cookies.txt', 'quiet': True, 'noplaylist': True}
+    opts = {
+            'format': 'bestaudio/best',
+            'cookiefile': './cookies.txt',
+            'noplaylist': True,
+            'quiet': True,
+            'default_search': 'ytsearch',
+            'http_headers': {
+               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
+               'Accept-Language': 'en-US,en;q=0.9',
+               'Referer': 'https://www.youtube.com/',
+               'Connection': 'keep-alive',
+            },
+        }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(track.stream_url, download=False)
     track.stream_url = info['url']
