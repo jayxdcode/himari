@@ -294,7 +294,7 @@ async def fetch_track_info(query: str) -> Track:
     # get direct audio
     opts = {
             'format': 'bestaudio/best',
-            'cookiefile': './cookies.txt',
+            'cookiefile': './cf.txt',
             'noplaylist': True,
             'quiet': True,
             'default_search': 'ytsearch',
