@@ -543,49 +543,60 @@ async def status(interaction: discord.Interaction):
         m = rem // 60
         await interaction.response.send_message(f"I’ve got **{h}h {m}m** left~")
 # ----------------- Events -----------------
-
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
-    logger.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
+	await bot.tree.sync()
+	logger.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-    global announcement_sent, general_channel
+	global announcement_sent, general_channel
+	announcement_sent = False  # reset this for every session or guild if needed
 
-    # (after await bot.tree.sync() and logger)
-    # pick a “general” channel
-    guild = bot.guilds[0]
-    for ch in guild.text_channels:
-        if "general" in ch.name.lower():
-            general_channel = ch
-            break
-    if not general_channel and guild.text_channels:
-        general_channel = guild.text_channels[0]
+	for guild in bot.guilds:
+		general_channel = None
 
-    # check for prior announcement
-    if general_channel:
-        async for msg in general_channel.history(limit=100):
-            if msg.author == bot.user and msg.embeds:
-                if msg.embeds[0].title.startswith("ʜɪᴍᴀʀɪ is back"):
-                    announcement_sent = True
-                    break
-        # send initial announcement
-        if not announcement_sent:
-            embed = discord.Embed(
-                title="ʜɪᴍᴀʀɪ is back — for now!",
-                description=(
-                    "Hiyaa~\n\n"
-                    "I’m awake for the next **3 hours, 55 minutes** and ready to help! …\n"
-                    "Run `/remaining` anytime to see how much time I’ve got left.\n\n"
-                    "Let’s make the most of it, okay~?\n\n\n"
-                    "`Build info (for debugging): jayxdcode/ʜɪᴍᴀʀɪ version 0.0.5 (Docker Image release, keys=BETA-unstable-5, arch='Linux AMD64', imageversion=latest)`"
-                ),
-                color=discord.Color.green()
-            )
-            embed.set_footer(text="© jayxcode")
-            await general_channel.send(embed=embed)
-            announcement_sent = True
+		# pick a “general” channel
+		for ch in guild.text_channels:
+			if "general" in ch.name.lower():
+				general_channel = ch
+				break
+		if not general_channel and guild.text_channels:
+			general_channel = guild.text_channels[0]
 
-        update_time_left.start()
+		# check for prior announcement
+		if general_channel:
+			try:
+				async for msg in general_channel.history(limit=100):
+					if msg.author == bot.user and msg.embeds:
+						if msg.embeds[0].title.startswith("ʜɪᴍᴀʀɪ is back"):
+							announcement_sent = True
+							break
+			except discord.Forbidden:
+				logger.warning(f"Missing permissions to read history in #{general_channel.name} of {guild.name}")
+				continue
+
+			# send initial announcement
+			if not announcement_sent:
+				embed = discord.Embed(
+					title="ʜɪᴍᴀʀɪ is back — for now!",
+					description=(
+						"Hiyaa~\n\n"
+						"I’m awake for the next **3 hours, 55 minutes** and ready to help! …\n"
+						"Run `/remaining` anytime to see how much time I’ve got left.\n\n"
+						"Let’s make the most of it, okay~?\n\n\n"
+						"`Build info (for debugging): jayxdcode/ʜɪᴍᴀʀɪ version 0.0.5 (Docker Image release, keys=BETA-unstable-5, arch='Linux AMD64', imageversion=latest)`"
+					),
+					color=discord.Color.green()
+				)
+				embed.set_footer(text="© jayxcode")
+
+				try:
+					await general_channel.send(embed=embed)
+					announcement_sent = True
+				except discord.Forbidden:
+					logger.warning(f"Missing permissions to send message in #{general_channel.name} of {guild.name}")
+					continue
+
+	update_time_left.start()
 
 # ----------------- Run Bot -----------------
 
