@@ -28,4 +28,4 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DU }}/himari-alpha
-            ${{ secrets.DU }}/himari_alpha:${{ github.sha }}
+            ${{ secrets.DU }}/himari-alpha:${{ github.sha }}
