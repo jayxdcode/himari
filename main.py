@@ -1,6 +1,8 @@
 import os
 import discord
 from discord.ext import commands
+from discord.ext import tasks
+import datetime
 from discord import app_commands
 import yt_dlp
 import asyncio
@@ -38,7 +40,13 @@ logger = logging.getLogger()
 
 # Initialize  APIs
 ytmusic = YTMusic()
-_api = LrcLibAPI(user_agent="jayxdcode.Himari/0.0.4")
+_api = LrcLibAPI(user_agent="jayxdcode.Himari/0.0.5")
+
+# ————— Uptime globals —————
+startup_time = datetime.datetime.utcnow()
+total_runtime = datetime.timedelta(hours=3, minutes=55)
+announcement_sent = False
+general_channel = None
 
 # Per-guild data stores
 song_queues   = {}  # guild_id -> deque of (url, title, artist, album, thumb, dur, interaction, secret)
@@ -311,6 +319,34 @@ async def fetch_track_info(query: str) -> Track:
     track.thumbnail= info['thumbnail']
     return track
 
+# --- Uptime notifs logic ---
+@tasks.loop(minutes=30)
+async def update_time_left():
+    if not general_channel:
+        return
+
+    elapsed   = datetime.datetime.utcnow() - startup_time
+    remaining = total_runtime - elapsed
+
+    if remaining <= datetime.timedelta(seconds=0):
+        await shutdown()
+        return
+
+    if remaining <= datetime.timedelta(minutes=5):
+        await general_channel.send(
+            "I'm about to sleep in 5 minutes. want me to be here for longer? pay up! jk hehe~"
+        )
+    else:
+        h, rem = divmod(remaining.seconds, 3600)
+        m = rem // 60
+        await general_channel.send(f"Himari’s time left: **{h}h {m}m**")
+
+
+async def shutdown():
+    if general_channel:
+        await general_channel.send("My time's up... See you again next boot~")
+    await bot.close()
+    
 # ------------- Playback Controls -------------
 
 @dataclass
@@ -496,27 +532,16 @@ async def end(interaction: discord.Interaction):
     song_queues.get(interaction.guild.id, deque()).clear()
     await interaction.response.send_message(get_response('end'), ephemeral=True)
     
-@bot.tree.command(name='status', description='Post the official Himari shutdown & repurpose announcement')
+@bot.tree.command(name='status', description='Check remaining server runtime (ʜɪᴍᴀʀɪ)')
 async def status(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="Official Notice: ʜɪᴍᴀʀɪ Bot Shutdown",
-        description=(
-            "To all users,\n\n"
-            "As of today, Himari’s music features have been officially taken offline. Development of version `v4` has been **suspended indefinitely**.\n\n"
-            "This decision was not made lightly, but after evaluating current goals and long-term sustainability, it became clear that a change in direction was necessary.\n\n"
-            "**What does this mean?**\n"
-            "Himari will remain online in limited capacity as we explore a complete repurpose of her core features. Future plans may involve transforming Himari into a productivity assistant, utility tool, or something entirely new.\n\n"
-            "Run ``/status`` to check the status from time to time. If you see this again, it means that ʜɪᴍᴀʀɪ us still down.\n\n"
-            "**Your feedback is welcome.**\n"
-            "If you have suggestions or use cases you’d like to see in the next phase of Himari, feel free to reply or contact me directly.\n\n"
-            "Thank you for your support and trust throughout this journey. More updates will follow soon."
-        ),
-        color=discord.Color.dark_gold()
-    )
-    embed.set_footer(text="— jayxdcode*")
-
-    await interaction.response.send_message(embed=embed)
-
+    elapsed   = datetime.datetime.utcnow() - startup_time
+    remaining = total_runtime - elapsed
+    if remaining <= datetime.timedelta(seconds=0):
+        await interaction.response.send_message("I'm already out of time! See you later~")
+    else:
+        h, rem = divmod(remaining.seconds, 3600)
+        m = rem // 60
+        await interaction.response.send_message(f"I’ve got **{h}h {m}m** left~")
 # ----------------- Events -----------------
 
 @bot.event
@@ -524,7 +549,46 @@ async def on_ready():
     await bot.tree.sync()
     logger.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
+    global announcement_sent, general_channel
+
+        # (after await bot.tree.sync() and logger)
+        # pick a “general” channel
+        guild = bot.guilds[0]
+        for ch in guild.text_channels:
+            if "general" in ch.name.lower():
+                general_channel = ch
+                break
+        if not general_channel and guild.text_channels:
+            general_channel = guild.text_channels[0]
+
+        # check for prior announcement
+        if general_channel:
+            async for msg in general_channel.history(limit=100):
+                if msg.author == bot.user and msg.embeds:
+                    if msg.embeds[0].title.startswith("ʜɪᴍᴀʀɪ is back"):
+                        announcement_sent = True
+                        break
+            # send initial announcement
+            if not announcement_sent:
+                embed = discord.Embed(
+                    title="ʜɪᴍᴀʀɪ is back — for now!",
+                    description=(
+                        "Hiyaa~\n\n"
+                        "I’m awake for the next **3 hours, 55 minutes** and ready to help! …\n"
+                        "Run `/remaining` anytime to see how much time I’ve got left.\n\n"
+                        "Let’s make the most of it, okay~?\n\n\n"
+                        "`Build info (for debugging): jayxdcode/ʜɪᴍᴀʀɪ version 0.0.5 (Docker Image release, keys=BETA-unstable-5, arch='Linux AMD64', imageversion=latest)`"
+                    ),
+                    color=discord.Color.green()
+                )
+                embed.set_footer(text="© jayxcode")
+                await general_channel.send(embed=embed)
+                announcement_sent = True
+
+            update_time_left.start()
+
 # ----------------- Run Bot -----------------
+
 
 bot.run(DISCORD_TOKEN)
 
